@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2563eb">
+<title>Form Penilaian Tasmi PWA</title>
+
+<link rel="manifest" href='data:application/json,{"name":"Penilaian Tasmi","short_name":"Tasmi","start_url":".","display":"standalone","background_color":"#ffffff","theme_color":"#2563eb","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/3389/3389152.png","sizes":"512x512","type":"image/png"}]}'>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  body{ font-family:'Segoe UI',Arial; background:#f2f5f9; padding:20px; margin:0; }
+  .card{ max-width:800px; background:#fff; padding:25px; border-radius:12px; box-shadow:0 6px 16px rgba(0,0,0,.1); margin:auto; margin-bottom:20px; }
+  h2{ text-align:center; margin-bottom:20px; color: #1e293b; }
+  .field{ margin-bottom:15px; }
+  label{ font-weight:600; display:block; margin-bottom:6px; }
+  input{ width:100%; padding:12px; border:1px solid #ccc; border-radius:8px; box-sizing:border-box; font-size: 16px; }
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+  .result{ background:#f8f9fa; padding:12px; border-radius:8px; font-weight:bold; text-align:center; border:1px solid #eee; }
+  button{ width:100%; padding:14px; border:none; background:#2563eb; color:white; border-radius:8px; cursor:pointer; font-weight:600; margin-top:10px; font-size: 16px; }
+  button:hover{ background:#1d4ed8; }
+  .btn-excel{ background:#16a34a; margin-top: 15px; }
+  .btn-clear{ background:#dc2626; margin-top: 10px; font-size: 12px; padding: 8px; }
+  
+  table { width:100%; border-collapse:collapse; margin-top:10px; }
+  table th, table td { border:1px solid #ddd; padding:10px; text-align:center; }
+  table th { background:#f1f5f9; }
+  
+  .data-table { font-size:13px; margin-top:20px; }
+  .filter-group { display: flex; gap: 10px; margin-bottom: 15px; }
+  .filter-group input { flex: 1; }
+</style>
+</head>
+
+<body onload="muatTabel()">
+
+<div class="card">
+  <h2>Form Penilaian Tasmi</h2>
+  <div class="field">
+    <label>Nama Penguji</label>
+    <input type="text" id="penguji" placeholder="Masukkan nama penguji...">
+  </div>
+  <div class="field"><label>Nama Santri</label><input type="text" id="nama"></div>
+  <div class="field"><label>Kelas</label><input type="text" id="kelas"></div>
+  <div class="field"><label>Juz</label><input type="text" id="juz"></div>
+
+  <table>
+    <thead>
+      <tr><th>Hal</th><th>Kes Tahfizh (Maks 40)</th><th>Kes Tahsin (Maks 10)</th></tr>
+    </thead>
+    <tbody id="halamanRows"></tbody>
+  </table>
+
+  <div class="grid">
+    <div class="result" id="box-tahfizh">Nilai Tahfizh: 200 - 0 = 200</div>
+    <div class="result" id="box-tahsin">Nilai Tahsin: 50 - 0 = 50</div>
+  </div>
+  <div class="grid">
+    <div class="result">Total: <span id="total">0</span></div>
+    <div class="result">Akhir: <span id="akhir">0.00</span></div>
+  </div>
+
+  <button onclick="simpan()">Simpan Data ke HP</button>
+</div>
+
+<div class="card">
+  <h3>Riwayat Data (Lokal)</h3>
+  <div class="filter-group">
+    <input type="text" id="cariNama" placeholder="Cari Nama Penguji/Santri..." onkeyup="aplikasikanFilter()">
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Tanggal</th>
+        <th>Santri</th>
+        <th>Penguji</th>
+      </tr>
+    </thead>
+    <tbody id="isiTabel"></tbody>
+  </table>
+  <button class="btn-excel" onclick="exportExcelTerpilih()">Download Excel</button>
+  <button class="btn-clear" onclick="hapusSemuaData()">Hapus Semua Riwayat</button>
+</div>
+
+<script>
+let allData = JSON.parse(localStorage.getItem("data_tasmi")) || [];
+
+// Generate baris tabel input
+const tbodyInput = document.getElementById("halamanRows");
+for(let i=1; i<=5; i++){
+  tbodyInput.innerHTML += `<tr><td>${i}</td>
+    <td><input type="number" class="ktp" placeholder="0"></td>
+    <td><input type="number" class="ksp" placeholder="0"></td></tr>`;
+}
+
+function jumlahDigit(s){ return (s||"").toString().split("").reduce((a,b)=>a+(parseInt(b)||0),0); }
+
+function hitung() {
+  let tErr=0, sErr=0;
+  document.querySelectorAll(".ktp").forEach(i => {
+    let val = jumlahDigit(i.value);
+    if(val > 40) { alert("Maksimal 40 per halaman!"); i.value=""; val=0; }
+    tErr += val;
+  });
+  document.querySelectorAll(".ksp").forEach(i => {
+    let val = jumlahDigit(i.value);
+    if(val > 10) { alert("Kesalahan Tahsin maksimal 10!"); i.value=""; val=0; }
+    sErr += val;
+  });
+
+  const nT = 200 - tErr, nS = 50 - sErr;
+  const total = nT + nS, akhir = (total/2.5).toFixed(2);
+
+  document.getElementById("box-tahfizh").innerHTML = `Nilai: ${nT}`;
+  document.getElementById("box-tahsin").innerHTML = `Nilai: ${nS}`;
+  document.getElementById("total").innerText = total;
+  document.getElementById("akhir").innerText = akhir;
+  return { tErr, sErr, nT, nS, total, akhir };
+}
+
+document.addEventListener("input", e => { 
+  if(e.target.classList.contains("ktp") || e.target.classList.contains("ksp")) hitung(); 
+});
+
+function simpan() {
+  const h = hitung();
+  const namaPenguji = document.getElementById("penguji").value;
+  const namaSantri = document.getElementById("nama").value;
+  
+  if(!namaSantri || !namaPenguji) return alert("Nama Santri dan Penguji wajib diisi!");
+
+  const dataBaru = [
+    new Date().toLocaleDateString('id-ID'), // 0
+    namaSantri,                             // 1
+    document.getElementById("kelas").value, // 2
+    document.getElementById("juz").value,   // 3
+    [...document.querySelectorAll(".ktp")].map(i=>i.value||0).join(","), // 4
+    [...document.querySelectorAll(".ksp")].map(i=>i.value||0).join(","), // 5
+    h.tErr, h.sErr, h.nT, h.nS, h.total, h.akhir, // 6-11
+    namaPenguji                             // 12
+  ];
+
+  allData.unshift(dataBaru); // Tambah ke awal array
+  localStorage.setItem("data_tasmi", JSON.stringify(allData));
+  alert("Data Berhasil Disimpan di Memori HP!");
+  resetForm();
+  muatTabel();
+}
+
+function muatTabel() {
+  aplikasikanFilter();
+}
+
+function aplikasikanFilter() {
+  const keyword = document.getElementById("cariNama").value.toLowerCase();
+  const tbody = document.getElementById("isiTabel");
+  let html = "";
+  
+  allData.forEach((r) => {
+    const namaSantri = (r[1] || "").toLowerCase();
+    const namaPenguji = (r[12] || "").toLowerCase();
+    if (namaSantri.includes(keyword) || namaPenguji.includes(keyword)) {
+      html += `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[12]}</td></tr>`;
+    }
+  });
+  tbody.innerHTML = html;
+}
+
+function resetForm() {
+  document.getElementById("nama").value = "";
+  document.getElementById("kelas").value = "";
+  document.getElementById("juz").value = "";
+  document.querySelectorAll(".ktp, .ksp").forEach(i => i.value = "");
+  hitung();
+}
+
+function exportExcelTerpilih() {
+  if (allData.length === 0) return alert("Tidak ada data untuk diunduh!");
+  const header = ["Tanggal", "Nama Santri", "Kelas", "Juz", "Det_Tahfizh", "Det_Tahsin", "Err_Taf", "Err_Tas", "Score_Taf", "Score_Tas", "Total", "Akhir", "Penguji"];
+  const wsData = [header, ...allData];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Laporan Tasmi");
+  XLSX.writeFile(wb, `Laporan_Tasmi_Lokal.xlsx`);
+}
+
+function hapusSemuaData() {
+  if(confirm("Hapus semua riwayat di HP ini?")) {
+    localStorage.removeItem("data_tasmi");
+    allData = [];
+    muatTabel();
+  }
+}
+
+// Service Worker Registration for PWA Offline
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    const swCode = `
+      self.addEventListener('install', e => self.skipWaiting());
+      self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
+    `;
+    const blob = new Blob([swCode], {type: 'text/javascript'});
+    navigator.serviceWorker.register(URL.createObjectURL(blob));
+  });
+}
+</script>
+</body>
+</html>
